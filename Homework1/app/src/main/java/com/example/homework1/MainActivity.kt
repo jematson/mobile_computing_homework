@@ -36,19 +36,53 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
+import androidx.compose.material3.Button
+import androidx.navigation.NavController
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+
+@Composable
+fun MyAppNavHost(navHostController: NavHostController) {
+    NavHost(
+        navController = navHostController,
+        startDestination = "mainScreen"
+    ) {
+        composable("mainScreen") {
+            MainScreen(
+                onNavigateToMessages = {navHostController.navigate("messageScreen")}
+            )
+        }
+        composable("messageScreen") {
+            Conversation(
+                onNavigateBack = {navHostController.popBackStack("mainScreen", false)},
+                messages = SampleData.conversationSample
+            )
+        }
+    }
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             Homework1Theme {
-                Conversation(SampleData.conversationSample)
+                val navController = rememberNavController()
+                MyAppNavHost(navHostController = navController)
             }
         }
     }
 }
 
 data class Message(val author: String, val body: String)
+
+@Composable
+fun MainScreen(onNavigateToMessages: () -> Unit) {
+    Column(modifier = Modifier.padding(top = 20.dp),) {
+        Button(onClick = onNavigateToMessages) { Text("Messages") }
+    }
+}
 
 @Composable
 fun MessageCard(msg: Message) {
@@ -100,11 +134,14 @@ fun MessageCard(msg: Message) {
 }
 
 @Composable
-fun Conversation(messages: List<Message>) {
-    LazyColumn (userScrollEnabled = true) {
-        items(messages) { message ->
-            MessageCard(message)
+fun Conversation(onNavigateBack: () -> Unit, messages: List<Message>) {
+    Column(modifier = Modifier.padding(top = 20.dp),) {
+        Button(onNavigateBack) { Text("Home") }
+        LazyColumn(userScrollEnabled = true) {
+            items(messages) { message ->
+                MessageCard(message)
 
+            }
         }
     }
 }
@@ -123,7 +160,7 @@ fun PreviewMessageCard() {
 @Composable
 fun PreviewConversation() {
     Homework1Theme {
-        Conversation(SampleData.conversationSample)
+        // Conversation(SampleData.conversationSample)
     }
 }
 
