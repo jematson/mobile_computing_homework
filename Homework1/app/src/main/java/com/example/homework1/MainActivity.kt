@@ -1,9 +1,11 @@
 package com.example.homework1
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
@@ -37,27 +39,51 @@ import androidx.compose.runtime.setValue
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.material3.Button
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.room.Room
+import coil3.compose.rememberAsyncImagePainter
+import com.example.homework1.data.AppDatabase
+import com.example.homework1.data.User
+import com.example.homework1.data.UserViewModel
+import com.example.homework1.data.UserViewModelFactory
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import java.io.File
 
 @Composable
-fun MyAppNavHost(navHostController: NavHostController) {
+fun MyAppNavHost(navHostController: NavHostController, userViewModel: UserViewModel) {
     NavHost(
         navController = navHostController,
         startDestination = "mainScreen"
     ) {
         composable("mainScreen") {
             MainScreen(
-                onNavigateToMessages = {navHostController.navigate("messageScreen")}
+                userViewModel = userViewModel,
+                onNavigateToMessages = {navHostController.navigate("messageScreen")},
+                onNavigateToProfile = {navHostController.navigate("profileScreen")}
             )
         }
         composable("messageScreen") {
             Conversation(
+                userViewModel = userViewModel,
                 onNavigateBack = {navHostController.popBackStack("mainScreen", false)},
                 messages = SampleData.conversationSample
+            )
+        }
+        composable("profileScreen") {
+            Profile(
+                userViewModel = userViewModel,
+                onNavigateBack = {navHostController.popBackStack("mainScreen", false)}
             )
         }
     }
@@ -66,10 +92,24 @@ fun MyAppNavHost(navHostController: NavHostController) {
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        val db = Room.databaseBuilder(
+            applicationContext,
+            AppDatabase::class.java, "homework-database"
+        ).build()
+
+        val userDao = db.userDao()
+
+        // Use the ViewModelFactory to get the ViewModel
+        val userViewModel: UserViewModel by viewModels {
+            UserViewModelFactory(userDao) // This ensures UserDao is passed to the ViewModel
+        }
+
+
         setContent {
             Homework1Theme {
                 val navController = rememberNavController()
-                MyAppNavHost(navHostController = navController)
+                MyAppNavHost(navHostController = navController, userViewModel = userViewModel)
             }
         }
     }
@@ -78,17 +118,48 @@ class MainActivity : ComponentActivity() {
 data class Message(val author: String, val body: String)
 
 @Composable
-fun MainScreen(onNavigateToMessages: () -> Unit) {
-    Column(modifier = Modifier.padding(top = 20.dp),) {
+fun MainScreen(userViewModel: UserViewModel, onNavigateToMessages: () -> Unit, onNavigateToProfile: () -> Unit) {
+    val users by userViewModel.users.collectAsState()
+    val context = LocalContext.current
+    var imageFile = File(context.filesDir, "profile.jpg")
+    val painter = rememberAsyncImagePainter(imageFile)
+
+    Column(modifier = Modifier.padding(all = 20.dp).padding(top = 10.dp)) {
+        LazyColumn {
+            items(users) { user ->
+                Row(modifier = Modifier.padding(all = 8.dp)) {
+                    Image(
+                        painter = painter,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .border(1.5.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "${user.userName}",
+                        color = MaterialTheme.colorScheme.secondary,
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                }
+            }
+        }
         Button(onClick = onNavigateToMessages) { Text("Messages") }
+        Button(onClick = onNavigateToProfile) { Text("Profile")}
+
     }
 }
 
 @Composable
-fun MessageCard(msg: Message) {
+fun MessageCard(msg: Message, currUsr: String) {
+    val context = LocalContext.current
+    var imageFile = File(context.filesDir, "profile.jpg")
+    val painter = rememberAsyncImagePainter(imageFile)
+
     Row(modifier = Modifier.padding(all = 8.dp)) {
         Image(
-            painter = painterResource(R.drawable.fish),
+            painter = painter,
             contentDescription = null,
             modifier = Modifier
                 .size(40.dp)
@@ -97,17 +168,14 @@ fun MessageCard(msg: Message) {
         )
         Spacer(modifier = Modifier.width(8.dp))
 
-        // We keep track if the message is expanded or not in this
-        // variable
         var isExpanded by remember { mutableStateOf(false) }
         val surfaceColor by animateColorAsState(
             if (isExpanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
         )
 
-        // We toggle the isExpanded variable when we click on this Column
         Column(modifier = Modifier.clickable { isExpanded = !isExpanded }) {
             Text(
-                text = msg.author,
+                text = currUsr,
                 color = MaterialTheme.colorScheme.secondary,
                 style = MaterialTheme.typography.titleSmall
             )
@@ -123,8 +191,7 @@ fun MessageCard(msg: Message) {
                 Text(
                     text = msg.body,
                     modifier = Modifier.padding(all = 4.dp),
-                    // If the message is expanded, we display all its content
-                    // otherwise we only display the first line
+
                     maxLines = if (isExpanded) Int.MAX_VALUE else 1,
                     style = MaterialTheme.typography.bodyMedium
                 )
@@ -134,12 +201,14 @@ fun MessageCard(msg: Message) {
 }
 
 @Composable
-fun Conversation(onNavigateBack: () -> Unit, messages: List<Message>) {
-    Column(modifier = Modifier.padding(top = 20.dp),) {
+fun Conversation(userViewModel: UserViewModel, onNavigateBack: () -> Unit, messages: List<Message>) {
+    val users by userViewModel.users.collectAsState()
+    val currentUsername = users[0]
+    Column(modifier = Modifier.padding(all = 20.dp).padding(top = 10.dp),) {
         Button(onNavigateBack) { Text("Home") }
         LazyColumn(userScrollEnabled = true) {
             items(messages) { message ->
-                MessageCard(message)
+                currentUsername.userName?.let { MessageCard(message, it) }
 
             }
         }
@@ -151,7 +220,7 @@ fun Conversation(onNavigateBack: () -> Unit, messages: List<Message>) {
 fun PreviewMessageCard() {
     Homework1Theme {
         Surface {
-            MessageCard(msg = Message("Person", "Wow look at this thing"))
+            MessageCard(msg = Message("Person", "Wow look at this thing"), "User")
         }
     }
 }
