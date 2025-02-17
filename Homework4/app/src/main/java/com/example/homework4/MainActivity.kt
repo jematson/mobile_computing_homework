@@ -31,14 +31,7 @@ class MainActivity : ComponentActivity() {
         val notificationHelper = NotificationHelper(this)
         notificationHelper.notificationChannel()
 
-        val launcher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
-                //if (isGranted) {
-                //    notificationHelper.createNotification("Permission Granted", "You will receive notifications.")
-                //}
-            }
-
-
-        //notificationHelper.requestPermission(launcher)
+        val launcher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
         setContent {
             Homework4Theme {
@@ -50,7 +43,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-// buttons to turn on notifications, onClick notificationHelper.requestPermission(launcher)
 
 @Preview(showBackground = true)
 @Composable

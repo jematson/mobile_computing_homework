@@ -38,9 +38,7 @@ fun TemperatureDisplay(notificationHelper: NotificationHelper) {
             event?.let {
                 currentTemp = it.values[0]
 
-                // send notification at certain temps
                 if (currentTemp > 40.0f) {
-                    //sendTempNotification
                     notificationHelper.createNotification("High Temperature", "Woah, it's getting awfully hot! Have some water.")
                 }
             }
